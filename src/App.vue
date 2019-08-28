@@ -19,7 +19,12 @@
       <legend>Инпут проверки клавиатуры (цифровая)</legend>
       <input id="input1" type="text" data-layout="numeric" @focus="focusInput" @blur="blurInput" />
     </fieldset>
-    <div class="onscreen-keyboard" :class="{ hide: input === null }" @mousedown.prevent>
+    <div
+      class="onscreen-keyboard"
+      :class="{ hide: input === null }"
+      @mousedown.prevent
+      @touchstart.prevent
+    >
       <onscreen-keyboard
         :options="{ useKbEvents: true }"
         :input="input"
@@ -31,8 +36,8 @@
 </template>
 
 <script>
-// import OnscreenKeyboard from "./components/keyboard.vue";
-import OnscreenKeyboard from "../dist/vue-onscreen-keyboard.umd.js";
+import OnscreenKeyboard from "./components/keyboard.vue";
+// import OnscreenKeyboard from "vue-onscreen-keyboard";
 
 export default {
   name: "app",

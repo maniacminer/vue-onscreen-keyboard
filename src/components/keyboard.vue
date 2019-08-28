@@ -1,13 +1,15 @@
 <template >
-  <div class="keyboard" @mousedown.prevent>
+  <div class="keyboard" @mousedown.prevent @touchstart.prevent>
     <div v-for="(line, index) in keySet" :key="index" class="line">
       <span
         v-for="(key, index) in line"
         :key="index"
         :class="getClassesOfKey(key)"
         v-text="getCaptionOfKey(key)"
-        @click="e => clickKey(e, key)"
-        @mousedown="mousedown"
+        @touchstart="e => touchstart(e, key)"
+        @touchend="e => touchend(e, key)"
+        @mousedown="e => touchstart(e, key)"
+        @mouseup="e => touchend(e, key)"
         :style="getKeyStyle(key)"
       />
     </div>
@@ -16,6 +18,11 @@
 
 <script>
 import Layouts from "./layouts";
+import { setTimeout, setInterval, clearInterval } from "timers";
+
+let repeatHandler;
+let trashhold;
+let pressTime = 0;
 
 export default {
   name: "onscreen-keyboard",
@@ -43,8 +50,8 @@ export default {
   data() {
     return {
       currentKeySet: this.defaultKeySet,
-
-      inputScrollLeft: 0
+      inputScrollLeft: 0,
+      pressedKey: null
     };
   },
 
@@ -73,6 +80,7 @@ export default {
             ) {
               let name = item.substring(1, item.length - 1);
               if (meta[name]) row.push(meta[name]);
+              // eslint-disable-next-line
               else console.warn("Missing named key from meta: " + name);
             } else {
               if (item == "") {
@@ -137,6 +145,10 @@ export default {
         let classes = "key " + (key.func || "") + " " + (key.classes || "");
         if (key.keySet && this.currentKeySet == key.keySet)
           classes += " activated";
+
+        if (key === this.pressedKey) {
+          classes += " touch";
+        }
 
         return classes;
       }
@@ -205,6 +217,49 @@ export default {
       if (this.options.preventClickEvent) e.preventDefault();
 
       this.inputScrollLeft = this.input.scrollLeft;
+    },
+
+    touchstart(e, key) {
+      this.pressedKey = key;
+
+      if (key.repeats) {
+        setTimeout(() => {
+          if (this.pressedKey === key && !repeatHandler) {
+            // держим по прежнему кнопку
+            repeatHandler = setInterval(() => {
+              if (this.pressedKey === key) {
+                this.clickKey(e, key);
+              } else {
+                clearInterval(repeatHandler);
+                repeatHandler = undefined;
+              }
+            }, 80);
+          }
+        }, 500);
+      }
+
+      if (key.alt) {
+        setTimeout(() => {}, 500);
+      }
+    },
+
+    touchend(e, key) {
+      // трешхолдим случайные повторы при касаниях
+      if (trashhold) return;
+      trashhold = true;
+      setTimeout(() => {
+        trashhold = false;
+      }, 100);
+
+      if (this.pressedKey === key) {
+        this.clickKey(e, key);
+        this.pressedKey = null;
+      }
+
+      if (repeatHandler) {
+        clearInterval(repeatHandler);
+        repeatHandler = undefined;
+      }
     },
 
     clickKey(e, key) {
@@ -303,8 +358,10 @@ export default {
 <style lang="scss">
 $width: 40;
 $height: 2.2em;
-$margin: 0.5em;
+$margin: 8px;
+$button-spacing: 6px;
 $radius: 0.3em;
+$button-width: 100px;
 
 .keyboard {
   width: 100%;
@@ -312,7 +369,7 @@ $radius: 0.3em;
 
   .line {
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     &:not(:last-child) {
       margin-bottom: $margin;
     }
@@ -320,10 +377,13 @@ $radius: 0.3em;
 
   .key {
     &:not(:last-child) {
-      margin-right: $margin;
+      // margin-right: $margin;
+      margin-right: $button-spacing;
     }
 
-    flex: $width;
+    // width: 240px;
+    flex-basis: $button-width;
+    // flex: $width;
     height: $height;
     line-height: $height;
     overflow: hidden;
@@ -343,13 +403,28 @@ $radius: 0.3em;
 
     &.backspace {
       background-image: url("./icons/backspace.svg");
+      background-image: url("data:image/svg+xml;utf8,<svg height='48' viewBox='0 0 48 48' width='48' xmlns='http://www.w3.org/2000/svg'><path d='M0 0h48v48h-48z' fill='none'/><path d='M44 6h-30c-1.38 0-2.47.7-3.19 1.76l-10.81 16.23 10.81 16.23c.72 1.06 1.81 1.78 3.19 1.78h30c2.21 0 4-1.79 4-4v-28c0-2.21-1.79-4-4-4zm-6 25.17l-2.83 2.83-7.17-7.17-7.17 7.17-2.83-2.83 7.17-7.17-7.17-7.17 2.83-2.83 7.17 7.17 7.17-7.17 2.83 2.83-7.17 7.17 7.17 7.17z' fill='white'/></svg>");
       background-position: center center;
       background-repeat: no-repeat;
-      background-size: 35%;
+      background-size: 35% cover;
     }
 
     &.half {
-      flex: $width / 2;
+      // flex: $width / 2 - 0.8;
+      flex-basis: $button-width / 2 - $button-spacing / 2;
+    }
+
+    &.double {
+      // flex: $width * 2 + 3;
+      flex-basis: $button-width * 2 + $button-spacing;
+    }
+
+    &.triple {
+      flex-basis: $button-width * 3 + $button-spacing * 2;
+    }
+
+    &.spacer {
+      flex-grow: 1;
     }
 
     &.control {
@@ -377,6 +452,13 @@ $radius: 0.3em;
       border-color: #8c8c8c;
     }
 
+    &.touch {
+      transform: scale(0.98); // translateY(1px);
+      color: #333;
+      background-color: #d4d4d4;
+      border-color: #8c8c8c;
+    }
+
     &.activated {
       color: #fff;
       background-color: #5bc0de;
@@ -384,9 +466,7 @@ $radius: 0.3em;
     }
   } // .key
   .placeholder {
-    flex: $width / 2;
-    height: $height;
-    line-height: $height;
+    flex-basis: 30px;
 
     &:not(:last-child) {
       margin-right: $margin;

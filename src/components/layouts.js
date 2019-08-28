@@ -1,4 +1,7 @@
+const backspace = { func: "backspace", classes: "control backspace", repeats: true }
+
 module.exports = {
+
 
 	"normal": {
 
@@ -9,7 +12,7 @@ module.exports = {
 			"caps": { keySet: "capsed", text: "Caps lock", width: 80, classes: "control" },
 			"space": { key: " ", text: "Space", width: 180 },
 			"enter": { key: "\r\n", text: "Enter", width: 80, classes: "control" },
-			"backspace": { func: "backspace", classes: "control backspace", width: 65 },
+			backspace,
 			"accept": { func: "accept", text: "Close", classes: "control featured" },
 			"next": { func: "next", text: "Next", classes: "control featured" }
 		},
@@ -49,11 +52,13 @@ module.exports = {
 			"shift": { keySet: "shifted", text: "ABC", classes: "control" },
 			"shift_ru": { keySet: "shifted_ru", text: "АБВ", classes: "control" },
 			"numbers": { keySet: "numbers", text: "123", classes: "control" },
-			"space": { key: " ", text: "", width: 200 },
-			"backspace": { func: "backspace", classes: "control" },
+			"space": { key: " ", text: "", classes: "spacer" },
+			backspace,
 			"accept": { func: "accept", text: "Close", classes: "control featured" },
 			// "next": { func: "next", text: "Next", classes: "featured" },
-			"zero": { key: "0", width: 85 }
+			"zero": { key: "0", width: 80 },
+			"ь": { key: "ь", alt: 'ъ' },
+			"Ь": { key: "Ь", alt: 'Ъ' }
 		},
 
 		default: [
@@ -66,7 +71,7 @@ module.exports = {
 		default_ru: [
 			"й ц у к е н г ш щ з х ъ",
 			" ф ы в а п р о л д ж э ",
-			"я ч с м и т ь б ю . ,",
+			"я ч с м и т {ь} б ю . ,",
 			"{numbers} {shift_ru} {en} {space} {backspace} {next}"
 		],
 
@@ -78,9 +83,9 @@ module.exports = {
 		],
 
 		shifted_ru: [
-			"Й Ц У К Е Н Г Ш Щ З Х Ъ",
+			"Ц У К Е Н Г Ш Щ З Х Ъ",
 			" Ф Ы В А П Р О Л Д Ж Э ",
-			"Я Ч С М И Т Ь Б Ю . ,",
+			"Я Ч С М И Т {Ь} Б Ю . ,",
 			"{numbers} {default_ru} {en} {space} {backspace} {next}"
 		],
 
@@ -97,18 +102,23 @@ module.exports = {
 		_meta: {
 			// "backspace": { func: "backspace", classes: "control", width: 130 },
 
-			"backspace": { func: "backspace", classes: "control" },
-			"accept": { func: "accept", text: "Close", classes: "control featured" },
-			"next": { func: "next", text: "Next", classes: "control featured" },
-			"zero": { key: "0", width: 130 }
+			backspace,
+			"accept": { func: "accept", text: " ", classes: "control featured" },
+			"next": { func: "next", text: " ", classes: "control featured" },
+			"zero": { key: "222222222", classes: "triple" },
+			"half": { key: "half", classes: "half" },
+			"double": { key: "0000", classes: "double" },
+			"triple": { key: "0000", classes: "triple" },
 
 		},
 
 		default: [
-			"1 2 3",
-			"4 5 6",
-			"7 8 9",
-			"_ - . {zero} {backspace} {next} {accept}"
+			"{half} {half} 0 0 0 0",
+			"1 2 3 0 0",
+			"4 5 6 {double}",
+			"7 8 {triple}",
+			"{accept} {accept} {accept} {zero} {backspace} {next} {accept}"
+			// "_ - . {zero} {backspace} {next} {accept}"
 		]
 	}
 
