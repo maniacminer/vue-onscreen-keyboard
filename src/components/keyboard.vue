@@ -1,28 +1,30 @@
 <template >
-  <div class="keyboard" @mousedown.prevent @touchstart.prevent>
-    <div v-for="(line, index) in keySet" :key="index" class="line">
-      <span
-        v-for="(key, index) in line"
-        :key="index"
-        :class="getClassesOfKey(key)"
-        v-text="getCaptionOfKey(key)"
-        @touchstart="e => touchstart(e, key)"
-        @touchend="e => touchend(e, key)"
-        @mousedown="e => touchstart(e, key)"
-        @mouseup="e => touchend(e, key)"
-        :style="getKeyStyle(key)"
-      />
+  <div class="keyboard" @mousedown.prevent @mouseup="touchend">
+    <div class="pad" v-for="(pad, index) in pads" :class="getClassesOfPad(pad)" :key="index">
+      <div class="line" v-for="(line, index) in pad" :key="index">
+        <div
+          v-for="(key, index) in line"
+          :key="index"
+          :data-alt="key.alt"
+          :class="getClassesOfKey(key)"
+          v-text="getCaptionOfKey(key)"
+          @touchstart="e => touchstart(e, key)"
+          @touchend="e => touchend(e, key)"
+          @mousedown="e => touchstart(e, key)"
+          @mouseup="e => touchend(e, key)"
+          :style="getKeyStyle(key)"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import Layouts from "./layouts";
-import { setTimeout, setInterval, clearInterval } from "timers";
 
 let repeatHandler;
 let trashhold;
-let pressTime = 0;
+let touchStart;
 
 export default {
   name: "onscreen-keyboard",
@@ -34,10 +36,7 @@ export default {
       default: "default"
     },
 
-    accept: Function,
-    cancel: Function,
     change: Function,
-    next: Function,
 
     options: {
       type: Object,
@@ -56,19 +55,47 @@ export default {
   },
 
   computed: {
-    keySet() {
+    pads() {
       let layout = this.getLayout();
       if (!layout) return;
+      const pads = [];
+      layout.forEach(pad => {
+        pads.push(this.buildPad(pad.pad));
+      });
 
-      let keySet = layout[this.currentKeySet];
-      if (!keySet) return;
+      return pads;
+    }
+  },
 
-      let res = [];
+  watch: {
+    layout() {
+      // const layout = this.getLayout();
 
-      let meta = layout["_meta"] || {};
+      this.changeKeySet(this.defaultKeySet);
+    }
+  },
+
+  methods: {
+    getLayout() {
+      if (typeof this.layout === "string") {
+        return Layouts[this.layout];
+      } else {
+        return this.layout;
+      }
+    },
+
+    buildPad(pad) {
+      let keySet = pad[this.currentKeySet];
+      if (!keySet) {
+        keySet = pad["default"];
+      }
+
+      const res = [];
+
+      const meta = pad["_meta"] || {};
 
       keySet.forEach(line => {
-        let row = [];
+        const row = [];
         line.split(" ").forEach(item => {
           if (!!item && typeof item === "object") {
             row.push(item);
@@ -102,33 +129,16 @@ export default {
       });
 
       return res;
-    }
-  },
-
-  watch: {
-    layout() {
-      const layout = this.getLayout();
-
-      let keyset = this.defaultKeySet;
-
-      if (layout[keyset] != null) {
-        this.currentKeySet = keyset;
-      } else {
-        this.currentKeySet = "default";
-      }
-    }
-  },
-
-  methods: {
-    getLayout() {
-      if (typeof this.layout === "string") return Layouts[this.layout];
-
-      return this.layout;
     },
 
     changeKeySet(name) {
       let layout = this.getLayout();
-      if (layout[name] != null) this.currentKeySet = name;
+
+      if (layout[name] != null) {
+        this.currentKeySet = name;
+      } else {
+        this.currentKeySet = "default";
+      }
     },
 
     toggleKeySet(name) {
@@ -139,10 +149,18 @@ export default {
       return key.text || key.key || "";
     },
 
+    getClassesOfPad(pad) {
+      return pad.classes;
+    },
+
     getClassesOfKey(key) {
       if (key.placeholder) return "placeholder";
       else {
         let classes = "key " + (key.func || "") + " " + (key.classes || "");
+        if (!key.noPopup) {
+          classes += " popup";
+        }
+
         if (key.keySet && this.currentKeySet == key.keySet)
           classes += " activated";
 
@@ -220,6 +238,7 @@ export default {
     },
 
     touchstart(e, key) {
+      touchStart = performance.now();
       this.pressedKey = key;
 
       if (key.repeats) {
@@ -237,13 +256,11 @@ export default {
           }
         }, 500);
       }
-
-      if (key.alt) {
-        setTimeout(() => {}, 500);
-      }
     },
 
-    touchend(e, key) {
+    touchend(e) {
+      const touchDuration = performance.now() - touchStart;
+
       // трешхолдим случайные повторы при касаниях
       if (trashhold) return;
       trashhold = true;
@@ -251,10 +268,13 @@ export default {
         trashhold = false;
       }, 100);
 
-      if (this.pressedKey === key) {
-        this.clickKey(e, key);
-        this.pressedKey = null;
+      if (touchDuration >= 400 && this.pressedKey.alt) {
+        this.pressedKey = this.pressedKey.alt;
       }
+
+      this.clickKey(e, this.pressedKey);
+
+      this.pressedKey = null;
 
       if (repeatHandler) {
         clearInterval(repeatHandler);
@@ -264,7 +284,7 @@ export default {
 
     clickKey(e, key) {
       if (!this.input) return;
-      if (this.options.preventClickEvent) e.preventDefault();
+      // if (this.options.preventClickEvent) e.preventDefault();
 
       let caret = this.getCaret();
       let text = this.input.value;
@@ -278,21 +298,6 @@ export default {
             case "backspace": {
               text = this.backspace(caret, text);
               break;
-            }
-
-            case "accept": {
-              if (this.accept) this.accept(text);
-              return;
-            }
-
-            case "cancel": {
-              if (this.cancel) this.cancel();
-              return;
-            }
-
-            case "next": {
-              if (this.next) this.next();
-              return;
             }
 
             default: {
@@ -329,10 +334,10 @@ export default {
 
       if (this.change) this.change(text, addChar);
 
-      if (this.input.maxLength > 0 && text.length >= this.input.maxLength) {
-        // The value reached the maxLength
-        if (this.next) this.next();
-      }
+      // if (this.input.maxLength > 0 && text.length >= this.input.maxLength) {
+      //   // The value reached the maxLength
+      //   if (this.next) this.next();
+      // }
 
       // trigger 'input' Event
       this.input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -360,126 +365,148 @@ $width: 40;
 $height: 2.2em;
 $margin: 8px;
 $button-spacing: 6px;
+$pad-spacing: 12px;
 $radius: 0.3em;
-$button-width: 100px;
+$button-width: 70px;
 
 .keyboard {
-  width: 100%;
+  display: flex;
+  flex-direction: row;
   margin: 0;
 
-  .line {
-    display: flex;
-    justify-content: space-between;
-    &:not(:last-child) {
-      margin-bottom: $margin;
-    }
-  }
+  .pad {
+    display: inline-flex;
+    flex-direction: column;
+    flex-grow: 1;
 
-  .key {
+    &--double {
+      flex-grow: 2;
+    }
+
     &:not(:last-child) {
       // margin-right: $margin;
-      margin-right: $button-spacing;
+      margin-right: $pad-spacing;
     }
 
-    // width: 240px;
-    flex-basis: $button-width;
-    // flex: $width;
-    height: $height;
-    line-height: $height;
-    overflow: hidden;
-
-    vertical-align: middle;
-    border: 1px solid #ccc;
-    color: #333;
-    background-color: #fff;
-    box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.6);
-    border-radius: $radius;
-
-    font-size: 1.25em;
-    text-align: center;
-    white-space: nowrap;
-    user-select: none;
-    cursor: pointer;
-
-    &.backspace {
-      background-image: url("./icons/backspace.svg");
-      background-image: url("data:image/svg+xml;utf8,<svg height='48' viewBox='0 0 48 48' width='48' xmlns='http://www.w3.org/2000/svg'><path d='M0 0h48v48h-48z' fill='none'/><path d='M44 6h-30c-1.38 0-2.47.7-3.19 1.76l-10.81 16.23 10.81 16.23c.72 1.06 1.81 1.78 3.19 1.78h30c2.21 0 4-1.79 4-4v-28c0-2.21-1.79-4-4-4zm-6 25.17l-2.83 2.83-7.17-7.17-7.17 7.17-2.83-2.83 7.17-7.17-7.17-7.17 2.83-2.83 7.17 7.17 7.17-7.17 2.83 2.83-7.17 7.17 7.17 7.17z' fill='white'/></svg>");
-      background-position: center center;
-      background-repeat: no-repeat;
-      background-size: 35% cover;
+    .line {
+      display: flex;
+      justify-content: space-between;
+      &:not(:last-child) {
+        margin-bottom: $margin;
+      }
     }
 
-    &.half {
-      // flex: $width / 2 - 0.8;
-      flex-basis: $button-width / 2 - $button-spacing / 2;
-    }
+    .key {
+      &:not(:last-child) {
+        // margin-right: $margin;
+        margin-right: $button-spacing;
+      }
 
-    &.double {
-      // flex: $width * 2 + 3;
-      flex-basis: $button-width * 2 + $button-spacing;
-    }
+      // width: 240px;
+      flex: 1 1 $button-width;
+      min-width: 50px;
+      // width: $button-width;
+      // flex: $width;
+      height: $height;
+      line-height: $height - 0.5em;
+      overflow: hidden;
 
-    &.triple {
-      flex-basis: $button-width * 3 + $button-spacing * 2;
-    }
-
-    &.spacer {
-      flex-grow: 1;
-    }
-
-    &.control {
-      color: #fff;
-      background-color: #7d7d7d;
-      border-color: #656565;
-    }
-
-    &.featured {
-      color: #fff;
-      background-color: #337ab7;
-      border-color: #2e6da4;
-    }
-
-    &:hover {
+      vertical-align: middle;
+      border: 1px solid #ccc;
       color: #333;
-      background-color: #d6d6d6;
-      border-color: #adadad;
-    }
+      background-color: #fff;
+      box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.6);
+      border-radius: $radius;
 
-    &:active {
-      transform: scale(0.98); // translateY(1px);
-      color: #333;
-      background-color: #d4d4d4;
-      border-color: #8c8c8c;
-    }
+      font-size: 1.25em;
+      text-align: center;
+      white-space: nowrap;
+      user-select: none;
+      cursor: pointer;
 
-    &.touch {
-      transform: scale(0.98); // translateY(1px);
-      color: #333;
-      background-color: #d4d4d4;
-      border-color: #8c8c8c;
-    }
+      &::after {
+        content: attr(data-alt);
+        font-size: 0.5em;
+        vertical-align: super;
+        color: grey;
+      }
 
-    &.activated {
-      color: #fff;
-      background-color: #5bc0de;
-      border-color: #46b8da;
-    }
-  } // .key
-  .placeholder {
-    flex-basis: 30px;
+      &.backspace {
+        background-image: url("./icons/backspace.svg");
+        background-image: url("data:image/svg+xml;utf8,<svg height='48' viewBox='0 0 48 48' width='48' xmlns='http://www.w3.org/2000/svg'><path d='M0 0h48v48h-48z' fill='none'/><path d='M44 6h-30c-1.38 0-2.47.7-3.19 1.76l-10.81 16.23 10.81 16.23c.72 1.06 1.81 1.78 3.19 1.78h30c2.21 0 4-1.79 4-4v-28c0-2.21-1.79-4-4-4zm-6 25.17l-2.83 2.83-7.17-7.17-7.17 7.17-2.83-2.83 7.17-7.17-7.17-7.17 2.83-2.83 7.17 7.17 7.17-7.17 2.83 2.83-7.17 7.17 7.17 7.17z' fill='white'/></svg>");
+        background-position: center center;
+        background-repeat: no-repeat;
+        background-size: 35% cover;
+      }
 
-    &:not(:last-child) {
-      margin-right: $margin;
+      &--fixed {
+        flex: 0 1 $button-width;
+      }
+
+      &--half {
+        // flex: $width / 2 - 0.8;
+        flex-basis: $button-width / 2 - $button-spacing / 2;
+      }
+
+      &--double {
+        // flex: $width * 2 + 3;
+        flex-basis: $button-width * 2 + $button-spacing;
+      }
+
+      &--triple {
+        flex-basis: $button-width * 3 + $button-spacing * 2;
+      }
+
+      &.control {
+        color: #fff;
+        background-color: #7d7d7d;
+        border-color: #656565;
+      }
+
+      &.featured {
+        color: #fff;
+        background-color: #337ab7;
+        border-color: #2e6da4;
+      }
+
+      &:hover {
+        color: #333;
+        background-color: #d6d6d6;
+        border-color: #adadad;
+      }
+
+      &:active {
+        transform: scale(0.98) translateY(1px);
+        color: #333;
+        background-color: #d4d4d4;
+        border-color: #8c8c8c;
+      }
+
+      &.touch {
+        transform: scale(0.98) translateY(1px);
+        color: #333;
+      }
+      &.popup.touch {
+        transform: scale(2) translateY(-70%); // translateY(100%);
+      }
+
+      &.activated {
+        color: #fff;
+        background-color: #5bc0de;
+        border-color: #46b8da;
+      }
+    } // .key
+    .placeholder {
+      flex-basis: 30px;
+
+      &:not(:last-child) {
+        margin-right: $margin;
+      }
     }
   }
 
-  &:before,
-  &:after {
-    content: "";
-    display: table;
-  }
-  &:after {
-    clear: both;
+  .spacer {
+    flex-grow: 1;
   }
 } // .keyboard
 </style>

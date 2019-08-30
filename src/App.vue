@@ -79,7 +79,7 @@ export default {
     this.$on("onscreen-keyboard-blur", el => {
       this.$nextTick(() => {
         if (this.input === el) {
-          this.input = null;
+          // this.input = null;
         }
       });
     });
