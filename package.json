@@ -1,6 +1,6 @@
 {
   "name": "vue-onscreen-keyboard",
-  "version": "0.1.0",
+  "version": "0.1.33",
   "private": false,
   "main": "dist/vue-onscreen-keyboard.common.js",
   "scripts": {

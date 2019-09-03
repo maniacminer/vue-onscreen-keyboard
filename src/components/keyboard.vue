@@ -1,5 +1,5 @@
 <template >
-  <div class="keyboard" @mousedown.prevent @mouseup="touchend">
+  <div class="keyboard" @mousedown.prevent  @touchend.prevent @touchmove.prevent>
     <div class="pad" v-for="(pad, index) in pads" :class="getClassesOfPad(pad)" :key="index">
       <div class="line" v-for="(line, index) in pad" :key="index">
         <div
@@ -8,10 +8,9 @@
           :data-alt="key.alt"
           :class="getClassesOfKey(key)"
           v-text="getCaptionOfKey(key)"
-          @touchstart="e => touchstart(e, key)"
-          @touchend="e => touchend(e, key)"
-          @mousedown="e => touchstart(e, key)"
-          @mouseup="e => touchend(e, key)"
+          @touchstart.prevent="e => touchstart(e, key)"
+          @touchend.prevent="e => touchend(e, key)"
+          @click.prevent="e => clickKey(e, key)"
           :style="getKeyStyle(key)"
         />
       </div>
@@ -22,9 +21,9 @@
 <script>
 import Layouts from "./layouts";
 
-let repeatHandler;
-let trashhold;
-let touchStart;
+const REPEAT_KEY_AFTER = 500;
+const REPEAT_KEY_RATE = 80;
+
 
 export default {
   name: "onscreen-keyboard",
@@ -50,7 +49,8 @@ export default {
     return {
       currentKeySet: this.defaultKeySet,
       inputScrollLeft: 0,
-      pressedKey: null
+      pressedKey: null,
+      keysBeingTouch: []
     };
   },
 
@@ -164,7 +164,7 @@ export default {
         if (key.keySet && this.currentKeySet == key.keySet)
           classes += " activated";
 
-        if (key === this.pressedKey) {
+        if (this.keysBeingTouch.length && this.keysBeingTouch.some(v => v===key)) {
           classes += " touch";
         }
 
@@ -238,51 +238,78 @@ export default {
     },
 
     touchstart(e, key) {
-      touchStart = performance.now();
+      console.log('touchstart');
+
+      key.touchStart  = performance.now();
+      key.touchEnd    = undefined;
+
       this.pressedKey = key;
+      this.keysBeingTouch.push(key);
 
       if (key.repeats) {
         setTimeout(() => {
-          if (this.pressedKey === key && !repeatHandler) {
+          if (key.touchStart && !key.touchEnd && performance.now() - key.touchStart>=REPEAT_KEY_AFTER && !key.repeatHandler) {
             // держим по прежнему кнопку
-            repeatHandler = setInterval(() => {
-              if (this.pressedKey === key) {
+            key.repeatHandler = setInterval(() => {
+              if (!key.touchEnd) {
                 this.clickKey(e, key);
               } else {
-                clearInterval(repeatHandler);
-                repeatHandler = undefined;
+                clearInterval(key.repeatHandler );
+                key.repeatHandler  = undefined;
               }
-            }, 80);
+            }, REPEAT_KEY_RATE);
           }
-        }, 500);
+        }, REPEAT_KEY_AFTER);
       }
     },
 
-    touchend(e) {
-      const touchDuration = performance.now() - touchStart;
+    touchend(e, key) {
+      console.log('touchend', key);
 
-      // трешхолдим случайные повторы при касаниях
-      if (trashhold) return;
-      trashhold = true;
-      setTimeout(() => {
-        trashhold = false;
-      }, 100);
+      try {
+        if (key.trashholded) {
+          return;
+        }
 
-      if (touchDuration >= 400 && this.pressedKey.alt) {
-        this.pressedKey = this.pressedKey.alt;
+        key.touchEnd = performance.now();
+        key.touchDuration = key.touchEnd - key.touchStart;
+
+        if (key.touchDuration >= 400 && key.alt) {
+          let altKey;
+          if (typeof key.alt === "string"){
+            altKey = {key: key.alt}
+          } else {
+            altKey = key.alt
+          }
+
+          this.clickKey(e, altKey);           
+        } else {
+          this.clickKey(e, key);           
+        }
+      } 
+      catch (error) {
+        throw error;
       }
-
-      this.clickKey(e, this.pressedKey);
-
-      this.pressedKey = null;
-
-      if (repeatHandler) {
-        clearInterval(repeatHandler);
-        repeatHandler = undefined;
+      finally {
+        this.pressedKey = null;
+        key.trashholded = false;
+        const keyIdx = this.keysBeingTouch.indexOf(key);
+        if (keyIdx !== -1) {
+          this.keysBeingTouch.splice(keyIdx, 1)
+        }
       }
     },
 
     clickKey(e, key) {
+
+      // трешхолдим случайные повторы при касаниях
+      if (key.trashhold) return;     
+      
+      key.trashhold = true;
+      setTimeout(() => {
+        key.trashhold = false;
+      }, 150);    
+
       if (!this.input) return;
       // if (this.options.preventClickEvent) e.preventDefault();
 
@@ -485,9 +512,10 @@ $button-width: 70px;
       &.touch {
         transform: scale(0.98) translateY(1px);
         color: #333;
-      }
+      }      
+
       &.popup.touch {
-        transform: scale(2) translateY(-70%); // translateY(100%);
+        transform: scale(1.8) translateY(-60%); // translateY(100%);
       }
 
       &.activated {
